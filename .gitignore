@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
+eggs/
+*.whl
+venv/
+.venv/
+.env
+.env.*
+!.env.example
+
+# 你自己的人设和记忆（不要提交到公开仓库！）
+# 如果你 fork 了这个仓库到私有仓库，可以取消下面的注释
+# system_prompt.txt
+# seed_memories.py
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Tool caches
+.zread/
+.codegraph/
+AGENTS.md
+
+# Database
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# uv
+# uv.lock  # 如果需要锁定依赖版本，取消此行注释
