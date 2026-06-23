@@ -7,8 +7,8 @@
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 
-from ..repositories.base import MemoryRepository
-from ..utils.embedding import compute_embedding, cosine_similarity
+from repositories.base import MemoryRepository
+from utils.embedding import compute_embedding, cosine_similarity
 
 
 class MemoryService:

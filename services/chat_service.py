@@ -10,7 +10,7 @@ import asyncio
 import httpx
 from typing import List, Optional, Dict, Any, AsyncGenerator
 
-from ..repositories.base import ConversationRepository, MemoryRepository
+from repositories.base import ConversationRepository, MemoryRepository
 
 
 class ChatService:

@@ -9,7 +9,7 @@ import json
 import httpx
 from typing import List, Dict, Any
 
-from ..repositories.base import MemoryRepository
+from repositories.base import MemoryRepository
 
 
 class ExtractionService:

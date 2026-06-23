@@ -7,7 +7,7 @@
 import os
 from typing import Optional, Dict, Any, List
 
-from ..repositories.base import CacheStateRepository
+from repositories.base import CacheStateRepository
 
 
 class CacheService:
