@@ -1,0 +1,21 @@
+{
+  "version": "1.0",
+  "feature": "add-unit-tests",
+  "mode": "full",
+  "status": "archived",
+  "current_step": "archived",
+  "affects": [],
+  "completed": [
+    "archived",
+    "implementation_complete",
+    "index_regenerated",
+    "proposal_complete",
+    "skill_updated",
+    "tasks_complete",
+    "tests_passed",
+    "verification_passed"
+  ],
+  "pending": [],
+  "blocked_by": [],
+  "last_updated": "2026-06-23T06:01:19.064Z"
+}

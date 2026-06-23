@@ -1,0 +1,244 @@
+{
+  "version": "1.0",
+  "generatedAt": "2026-06-23T05:52:40.183Z",
+  "ospecCliVersion": "1.0.2",
+  "projectLayout": "nested",
+  "documentLanguage": "zh-CN",
+  "assets": [
+    {
+      "id": "ai-guide",
+      "strategy": "direct_copy",
+      "category": "ai_guidance",
+      "description": "Project-adopted AI guide copied from the OSpec mother spec.",
+      "targetRelativePath": ".ospec/for-ai/ai-guide.md",
+      "sourceRelativePath": "assets/for-ai/zh-CN/ai-guide.md",
+      "overwritePolicy": "if_missing",
+      "exists": true
+    },
+    {
+      "id": "execution-protocol",
+      "strategy": "direct_copy",
+      "category": "ai_guidance",
+      "description": "Project-adopted execution protocol copied from the OSpec mother spec.",
+      "targetRelativePath": ".ospec/for-ai/execution-protocol.md",
+      "sourceRelativePath": "assets/for-ai/zh-CN/execution-protocol.md",
+      "overwritePolicy": "if_missing",
+      "exists": true
+    },
+    {
+      "id": "build-index-script",
+      "strategy": "direct_copy",
+      "category": "tooling",
+      "description": "Rebuild script for SKILL.index.json.",
+      "targetRelativePath": ".ospec/tools/build-index-auto.cjs",
+      "sourceRelativePath": "dist/tools/build-index.js",
+      "overwritePolicy": "if_missing",
+      "exists": true
+    },
+    {
+      "id": "project-naming-conventions",
+      "strategy": "direct_copy",
+      "category": "conventions",
+      "description": "Project-adopted naming conventions copied from the OSpec mother spec.",
+      "targetRelativePath": ".ospec/for-ai/naming-conventions.md",
+      "sourceRelativePath": "assets/project-conventions/zh-CN/naming-conventions.md",
+      "overwritePolicy": "if_missing",
+      "exists": true
+    },
+    {
+      "id": "project-skill-conventions",
+      "strategy": "direct_copy",
+      "category": "conventions",
+      "description": "Project-adopted layered SKILL conventions copied from the OSpec mother spec.",
+      "targetRelativePath": ".ospec/for-ai/skill-conventions.md",
+      "sourceRelativePath": "assets/project-conventions/zh-CN/skill-conventions.md",
+      "overwritePolicy": "if_missing",
+      "exists": true
+    },
+    {
+      "id": "project-development-guide",
+      "strategy": "direct_copy",
+      "category": "conventions",
+      "description": "Project-adopted development guide copied from the OSpec mother spec.",
+      "targetRelativePath": ".ospec/for-ai/development-guide.md",
+      "sourceRelativePath": "assets/project-conventions/zh-CN/development-guide.md",
+      "overwritePolicy": "if_missing",
+      "exists": true
+    },
+    {
+      "id": "project-workflow-conventions",
+      "strategy": "direct_copy",
+      "category": "conventions",
+      "description": "Project-adopted workflow and change execution conventions copied from the OSpec mother spec.",
+      "targetRelativePath": ".ospec/for-ai/workflow-conventions.md",
+      "sourceRelativePath": "assets/project-conventions/zh-CN/workflow-conventions.md",
+      "overwritePolicy": "if_missing",
+      "exists": true
+    },
+    {
+      "id": "hook-template-pre-commit",
+      "strategy": "direct_copy",
+      "category": "hooks",
+      "description": "Template for the OSpec pre-commit hook.",
+      "targetRelativePath": ".ospec/templates/hooks/pre-commit",
+      "sourceRelativePath": "assets/git-hooks/pre-commit",
+      "overwritePolicy": "if_missing",
+      "exists": true
+    },
+    {
+      "id": "hook-template-post-merge",
+      "strategy": "direct_copy",
+      "category": "hooks",
+      "description": "Template for the OSpec post-merge hook.",
+      "targetRelativePath": ".ospec/templates/hooks/post-merge",
+      "sourceRelativePath": "assets/git-hooks/post-merge",
+      "overwritePolicy": "if_missing",
+      "exists": true
+    },
+    {
+      "id": "generated:docs/api/README.md",
+      "strategy": "template_generated",
+      "category": "templates",
+      "description": "Generated from OSpec template builders during project initialization.",
+      "targetRelativePath": ".ospec/docs/api/README.md",
+      "sourceRelativePath": null,
+      "overwritePolicy": "if_missing",
+      "exists": true
+    },
+    {
+      "id": "generated:docs/design/README.md",
+      "strategy": "template_generated",
+      "category": "templates",
+      "description": "Generated from OSpec template builders during project initialization.",
+      "targetRelativePath": ".ospec/docs/design/README.md",
+      "sourceRelativePath": null,
+      "overwritePolicy": "if_missing",
+      "exists": true
+    },
+    {
+      "id": "generated:docs/planning/README.md",
+      "strategy": "template_generated",
+      "category": "templates",
+      "description": "Generated from OSpec template builders during project initialization.",
+      "targetRelativePath": ".ospec/docs/planning/README.md",
+      "sourceRelativePath": null,
+      "overwritePolicy": "if_missing",
+      "exists": true
+    },
+    {
+      "id": "generated:docs/project/api-overview.md",
+      "strategy": "template_generated",
+      "category": "templates",
+      "description": "Generated from OSpec template builders during project initialization.",
+      "targetRelativePath": ".ospec/docs/project/api-overview.md",
+      "sourceRelativePath": null,
+      "overwritePolicy": "if_missing",
+      "exists": true
+    },
+    {
+      "id": "generated:docs/project/architecture.md",
+      "strategy": "template_generated",
+      "category": "templates",
+      "description": "Generated from OSpec template builders during project initialization.",
+      "targetRelativePath": ".ospec/docs/project/architecture.md",
+      "sourceRelativePath": null,
+      "overwritePolicy": "if_missing",
+      "exists": true
+    },
+    {
+      "id": "generated:docs/project/module-map.md",
+      "strategy": "template_generated",
+      "category": "templates",
+      "description": "Generated from OSpec template builders during project initialization.",
+      "targetRelativePath": ".ospec/docs/project/module-map.md",
+      "sourceRelativePath": null,
+      "overwritePolicy": "if_missing",
+      "exists": true
+    },
+    {
+      "id": "generated:docs/project/overview.md",
+      "strategy": "template_generated",
+      "category": "templates",
+      "description": "Generated from OSpec template builders during project initialization.",
+      "targetRelativePath": ".ospec/docs/project/overview.md",
+      "sourceRelativePath": null,
+      "overwritePolicy": "if_missing",
+      "exists": true
+    },
+    {
+      "id": "generated:docs/project/tech-stack.md",
+      "strategy": "template_generated",
+      "category": "templates",
+      "description": "Generated from OSpec template builders during project initialization.",
+      "targetRelativePath": ".ospec/docs/project/tech-stack.md",
+      "sourceRelativePath": null,
+      "overwritePolicy": "if_missing",
+      "exists": true
+    },
+    {
+      "id": "generated:docs/SKILL.md",
+      "strategy": "template_generated",
+      "category": "templates",
+      "description": "Generated from OSpec template builders during project initialization.",
+      "targetRelativePath": ".ospec/docs/SKILL.md",
+      "sourceRelativePath": null,
+      "overwritePolicy": "if_missing",
+      "exists": true
+    },
+    {
+      "id": "generated:README.md",
+      "strategy": "template_generated",
+      "category": "templates",
+      "description": "Generated from OSpec template builders during project initialization.",
+      "targetRelativePath": "README.md",
+      "sourceRelativePath": null,
+      "overwritePolicy": "if_missing",
+      "exists": true
+    },
+    {
+      "id": "generated:SKILL.md",
+      "strategy": "template_generated",
+      "category": "templates",
+      "description": "Generated from OSpec template builders during project initialization.",
+      "targetRelativePath": ".ospec/SKILL.md",
+      "sourceRelativePath": null,
+      "overwritePolicy": "if_missing",
+      "exists": true
+    },
+    {
+      "id": "runtime:.ospec/asset-sources.json",
+      "strategy": "runtime_generated",
+      "category": "runtime",
+      "description": "Generated by OSpec at runtime or during index/config initialization.",
+      "targetRelativePath": ".ospec/asset-sources.json",
+      "sourceRelativePath": null,
+      "overwritePolicy": "rebuild",
+      "exists": true
+    },
+    {
+      "id": "runtime:.skillrc",
+      "strategy": "runtime_generated",
+      "category": "runtime",
+      "description": "Generated by OSpec at runtime or during index/config initialization.",
+      "targetRelativePath": ".skillrc",
+      "sourceRelativePath": null,
+      "overwritePolicy": "rebuild",
+      "exists": true
+    },
+    {
+      "id": "runtime:SKILL.index.json",
+      "strategy": "runtime_generated",
+      "category": "runtime",
+      "description": "Generated by OSpec at runtime or during index/config initialization.",
+      "targetRelativePath": ".ospec/SKILL.index.json",
+      "sourceRelativePath": null,
+      "overwritePolicy": "rebuild",
+      "exists": true
+    }
+  ],
+  "summary": {
+    "directCopy": 9,
+    "templateGenerated": 11,
+    "runtimeGenerated": 3
+  }
+}

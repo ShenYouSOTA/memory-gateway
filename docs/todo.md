@@ -1,89 +1,117 @@
 # AI Memory Gateway - Todo & Roadmap
 
+> **战略方向**：先拆架构，后迁 zvec
+
+---
+
 ## 📋 待办事项
 
-### 高优先级 (P0)
+### Phase 1: 架构重构（Week 1-2）🔴 最高优先级
 
-- [ ] 引入 `uvloop` 事件循环替换，提升并发性能
-- [ ] 连接池参数调优（min_size=2, max_size=20, command_timeout=30）
-- [ ] 引入结构化日志（structlog），替代 print() 输出
-- [ ] MCP OAuth 2.1 鉴权框架，支持标准 OAuth 流程
+- [ ] 目录结构重组（routes/services/repositories/utils）
+- [ ] Repository 接口抽象（MemoryRepo、VectorRepo）
+- [ ] PostgreSQL Repository 实现
+- [ ] Service 层提取（MemoryService、ChatService）
+- [ ] Route 层提取（memories、conversations、settings）
+- [ ] 测试补充（覆盖率 80%+）
 
-### 中优先级 (P1)
+### Phase 2: zvec 迁移（Week 3）🟠 高优先级
 
-- [ ] OpenAI API 参数透传（temperature, top_p, max_tokens 等）
-- [ ] Input Guardrail 基础框架（敏感词过滤、输入验证）
-- [ ] Model Registry 基础实现（模型元信息管理）
-- [ ] 成本路由逻辑（根据模型价格自动选择最优模型）
+- [ ] zvec 集成（ZvecVectorRepository）
+- [ ] 数据迁移脚本
+- [ ] 双写模式（过渡期）
+- [ ] 完全切换到 zvec
+- [ ] 移除 pgvector 依赖
 
-### 低优先级 (P2)
+### Phase 3: 网关优化（Week 4+）🟡 中优先级
 
-- [ ] 智能路由逻辑（根据任务类型、语言、长度自动选模型）
-- [ ] Metrics 采集（Prometheus 格式）
-- [ ] 分布式链路追踪（OpenTelemetry）
-- [ ] 端到端集成测试
-- [ ] 文档更新与 CHANGELOG
+- [ ] uvloop 事件循环替换
+- [ ] 结构化日志（structlog）
+- [ ] 连接池参数调优
+- [ ] MCP OAuth 2.1 鉴权
+- [ ] OpenAI API 参数透传
+- [ ] Input Guardrail 基础框架
+- [ ] Model Registry 模型注册
+- [ ] 成本路由逻辑
+
+### Phase 4: 可观测性（可选）🟢 低优先级
+
+- [ ] Prometheus Metrics
+- [ ] OpenTelemetry Tracing
+- [ ] 请求日志增强
 
 ---
 
 ## 🗺️ Roadmap
 
-### v4.0 - 性能优化与安全加固
+### v0.2 - 架构重构
 
-**目标：** 提升并发性能，增强安全性
+**目标：** 清晰分层，职责分离
 
-- [x] uv 依赖管理（已完成）
-- [ ] uvloop 事件循环
-- [ ] 连接池调优
-- [ ] 结构化日志
-- [ ] MCP OAuth 2.1 鉴权
+- [x] pytest 测试框架（已完成，41 个测试）
+- [ ] main.py 拆分（routes/services/repositories）
+- [ ] database.py 拆分（Repository 模式）
+- [ ] 测试覆盖率 80%+
 
-### v4.1 - 智能路由与参数优化
+### v0.3 - zvec 迁移
 
-**目标：** 支持更灵活的模型选择和参数配置
+**目标：** 替换 pgvector，简化部署
 
-- [ ] OpenAI API 参数透传
-- [ ] Model Registry（模型元信息管理）
-- [ ] 成本路由（按价格自动选模型）
-- [ ] Input Guardrail（敏感词过滤）
+- [ ] zvec 集成
+- [ ] 数据迁移工具
+- [ ] 部署文档更新
 
-### v4.2 - 可观测性与监控
+### v0.4 - 网关增强
 
-**目标：** 完善监控和调试能力
+**目标：** 生产级网关能力
 
-- [ ] Prometheus Metrics 指标采集
-- [ ] OpenTelemetry 分布式链路追踪
-- [ ] 请求日志增强（request_id、耗时统计）
+- [ ] uvloop 性能优化
+- [ ] OAuth 鉴权
+- [ ] 智能路由
+- [ ] 监控指标
 
-### v5.0 - 企业级特性
+### v1.0 - 企业级
 
-**目标：** 支持多租户、高可用部署
+**目标：** 多租户、高可用
 
-- [ ] 多租户支持（用户隔离、配额管理）
-- [ ] 高可用部署方案（Redis 会话共享）
-- [ ] 完整的集成测试套件
-- [ ] API 文档自动生成（OpenAPI/Swagger）
+- [ ] 多租户支持
+- [ ] 高可用方案
+- [ ] API 文档自动生成
 
 ---
 
 ## 🔧 技术债务
 
-- [ ] `main.py` 拆分（3000+ 行，建议拆分为 routes/services/utils）
-- [ ] 添加类型注解（Type Hints）
-- [ ] 单元测试覆盖（当前无测试）
-- [ ] CI/CD 流水线（GitHub Actions）
-- [ ] 代码质量检查（ruff、mypy）
+| 债务 | 状态 | 计划 |
+|------|------|------|
+| main.py 拆分（3000+ 行） | 🔴 待处理 | Phase 1 |
+| database.py 拆分（2000+ 行） | 🔴 待处理 | Phase 1 |
+| pgvector 依赖 | 🟡 待替换 | Phase 2 |
+| 无类型注解 | 🟡 待处理 | Phase 3 |
+| 无 CI/CD | 🟢 待处理 | Phase 4 |
+| 无代码检查 | 🟢 待处理 | Phase 4 |
 
 ---
 
 ## 💡 功能想法（待讨论）
 
 - [ ] 记忆可视化（知识图谱展示）
-- [ ] 多语言支持（i18n）
+- [ ] 多语言支持（i8n）
 - [ ] 插件系统（自定义记忆提取器）
 - [ ] Webhook 通知（记忆提取完成、异常告警）
 - [ ] 记忆导出格式扩展（Markdown、CSV）
 
 ---
 
-*最后更新：2026-06-12*
+## 📊 进度追踪
+
+| 阶段 | 状态 | 开始 | 完成 |
+|------|------|------|------|
+| Phase 1: 架构重构 | 🟡 进行中 | 2026-06-23 | - |
+| Phase 2: zvec 迁移 | ⚪ 未开始 | - | - |
+| Phase 3: 网关优化 | ⚪ 未开始 | - | - |
+| Phase 4: 可观测性 | ⚪ 未开始 | - | - |
+
+---
+
+*最后更新：2026-06-23*

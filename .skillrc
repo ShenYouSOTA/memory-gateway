@@ -1,0 +1,232 @@
+{
+  "version": "4.0",
+  "mode": "full",
+  "ospecCliVersion": "1.0.2",
+  "projectLayout": "nested",
+  "hooks": {
+    "pre-commit": true,
+    "post-merge": true,
+    "spec-check": "error",
+    "change-check": "error",
+    "index-check": "error"
+  },
+  "index": {
+    "exclude": [
+      "node_modules/**",
+      "dist/**",
+      "*.test.*"
+    ]
+  },
+  "archive": {
+    "layout": "month-day"
+  },
+  "plugins": {
+    "stitch": {
+      "enabled": false,
+      "blocking": true,
+      "project": {
+        "project_id": "",
+        "project_url": "",
+        "save_on_first_run": true,
+        "enforce_single_project": true
+      },
+      "gemini": {
+        "model": "gemini-3-flash-preview",
+        "auto_switch_on_limit": true,
+        "save_on_fallback": true
+      },
+      "codex": {
+        "model": "",
+        "mcp_server": "stitch"
+      },
+      "runner": {
+        "mode": "command",
+        "command": "node",
+        "args": [
+          "${plugin_package_path}/dist/gemini-stitch-adapter.js",
+          "--change",
+          "${change_path}",
+          "--project",
+          "${project_path}"
+        ],
+        "cwd": "${project_path}",
+        "timeout_ms": 900000,
+        "token_env": "",
+        "extra_env": {}
+      },
+      "provider": "gemini",
+      "capabilities": {
+        "page_design_review": {
+          "enabled": false,
+          "step": "stitch_design_review",
+          "activate_when_flags": [
+            "ui_change",
+            "page_design",
+            "landing_page"
+          ]
+        }
+      }
+    },
+    "checkpoint": {
+      "enabled": false,
+      "blocking": true,
+      "runtime": {
+        "base_url": "",
+        "startup": {
+          "command": "",
+          "args": [],
+          "cwd": "${project_path}",
+          "timeout_ms": 600000
+        },
+        "readiness": {
+          "type": "url",
+          "url": "",
+          "timeout_ms": 180000
+        },
+        "auth": {
+          "command": "",
+          "args": [],
+          "cwd": "${project_path}",
+          "timeout_ms": 300000,
+          "when": "missing_storage_state"
+        },
+        "shutdown": {
+          "command": "",
+          "args": [],
+          "cwd": "${project_path}",
+          "timeout_ms": 120000
+        },
+        "storage_state": ".ospec/plugins/checkpoint/auth/storage-state.json"
+      },
+      "runner": {
+        "mode": "command",
+        "command": "node",
+        "args": [
+          "${plugin_package_path}/dist/playwright-checkpoint-adapter.js",
+          "--change",
+          "${change_path}",
+          "--project",
+          "${project_path}"
+        ],
+        "cwd": "${project_path}",
+        "timeout_ms": 900000,
+        "token_env": "",
+        "extra_env": {}
+      },
+      "capabilities": {
+        "ui_review": {
+          "enabled": false,
+          "step": "checkpoint_ui_review",
+          "activate_when_flags": [
+            "ui_change",
+            "page_design",
+            "landing_page"
+          ]
+        },
+        "flow_check": {
+          "enabled": false,
+          "step": "checkpoint_flow_check",
+          "activate_when_flags": [
+            "feature_flow",
+            "api_change",
+            "backend_change",
+            "integration_change"
+          ]
+        }
+      },
+      "stitch_integration": {
+        "enabled": true,
+        "auto_pass_stitch_review": true
+      }
+    }
+  },
+  "workflow": {
+    "core_required": [
+      "proposal",
+      "tasks",
+      "state",
+      "verification",
+      "skill_update",
+      "index_regenerated"
+    ],
+    "optional_steps": {
+      "code_review": {
+        "enabled": true,
+        "when": [
+          "high_risk",
+          "cross_module",
+          "multi_file_change"
+        ]
+      },
+      "design_doc": {
+        "enabled": true,
+        "when": [
+          "cross_module",
+          "complex_feature",
+          "architecture_change"
+        ]
+      },
+      "plan_doc": {
+        "enabled": true,
+        "when": [
+          "large_feature",
+          "multi_phase",
+          "important_decision"
+        ]
+      },
+      "security_review": {
+        "enabled": true,
+        "when": [
+          "security_related",
+          "auth",
+          "payment",
+          "external_api"
+        ]
+      },
+      "adr": {
+        "enabled": true,
+        "when": [
+          "architecture_change",
+          "important_decision"
+        ]
+      },
+      "db_change_doc": {
+        "enabled": true,
+        "when": [
+          "db_schema_change"
+        ]
+      },
+      "api_change_doc": {
+        "enabled": true,
+        "when": [
+          "public_api_change"
+        ]
+      }
+    },
+    "archive_gate": {
+      "require_verification": true,
+      "require_skill_update": true,
+      "require_index_regenerated": true,
+      "require_optional_steps_passed": true
+    },
+    "feature_flags": {
+      "supported": [
+        "cross_module",
+        "complex_feature",
+        "large_feature",
+        "multi_phase",
+        "architecture_change",
+        "important_decision",
+        "multi_file_change",
+        "security_related",
+        "auth",
+        "payment",
+        "external_api",
+        "db_schema_change",
+        "public_api_change",
+        "high_risk"
+      ]
+    }
+  },
+  "documentLanguage": "zh-CN"
+}
