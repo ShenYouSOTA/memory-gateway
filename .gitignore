@@ -38,6 +38,12 @@ Desktop.ini
 .codegraph/
 AGENTS.md
 
+# OSpec
+.ospec/
+.skillrc
+SKILL.md
+SKILL.index.json
+
 # Database
 *.db
 *.db-wal
