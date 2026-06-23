@@ -77,6 +77,15 @@ from database import (
 )
 import database as _db_module  # 用于 /api/settings 热更新 database.py 全局变量
 from memory_extractor import extract_memories, score_memories
+from repositories.memory_repo import PostgresMemoryRepository
+from repositories.conversation_repo import PostgresConversationRepository
+from repositories.config_repo import PostgresConfigRepository
+from services.memory_service import MemoryService
+from services.chat_service import ChatService
+from services.conversation_service import ConversationService
+from services.config_service import ConfigService
+from services.extraction_service import ExtractionService
+from services.cache_service import CacheService
 
 # ============================================================
 # 配置项 —— 全部从环境变量读取，部署时在云平台面板里设置
@@ -224,6 +233,23 @@ async def lifespan(app: FastAPI):
             count = await get_all_memories_count()
             print(f"✅ 记忆系统已启动，当前记忆数量：{count}")
 
+            # 创建 Repository 和 Service 实例，注入到 app.state
+            pool = await get_pool()
+            memory_repo = PostgresMemoryRepository(pool)
+            conversation_repo = PostgresConversationRepository(pool)
+            config_repo = PostgresConfigRepository(pool)
+
+            app.state.memory_repo = memory_repo
+            app.state.conversation_repo = conversation_repo
+            app.state.config_repo = config_repo
+            app.state.memory_service = MemoryService(memory_repo)
+            app.state.chat_service = ChatService(conversation_repo, memory_repo)
+            app.state.conversation_service = ConversationService(conversation_repo)
+            app.state.config_service = ConfigService(config_repo)
+            app.state.extraction_service = ExtractionService(memory_repo)
+            app.state.cache_service = CacheService(conversation_repo)
+            print("✅ Service 层依赖注入完成")
+
             # 从数据库恢复面板配置（重启后保持Dashboard修改过的值）
             try:
                 db_cfg = await get_all_gateway_config()
@@ -310,6 +336,23 @@ app = FastAPI(title="AI Memory Gateway", version="2.0.0", lifespan=lifespan)
 # 静态文件和模板配置
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+
+# 挂载路由模块
+from routes import (
+    chat_router,
+    memories_router,
+    conversations_router,
+    settings_router,
+    partition_router,
+    admin_router,
+)
+
+app.include_router(chat_router)
+app.include_router(memories_router)
+app.include_router(conversations_router)
+app.include_router(settings_router)
+app.include_router(partition_router)
+app.include_router(admin_router)
 
 
 # ============================================================
@@ -1079,20 +1122,7 @@ async def health_check():
     }
 
 
-@app.get("/v1/models")
-async def list_models():
-    """模型列表（让客户端不报错）"""
-    return {
-        "object": "list",
-        "data": [
-            {
-                "id": DEFAULT_MODEL,
-                "object": "model",
-                "created": 1700000000,
-                "owned_by": "ai-memory-gateway",
-            }
-        ],
-    }
+# /v1/models 路由已迁移到 routes/chat.py
 
 
 @app.post("/v1/chat/completions")
@@ -1614,130 +1644,11 @@ async def dashboard_page(request: Request):
 
 
 # ============================================================
-# 管理 API
+# 管理 API - 已迁移到 routes/memories.py
 # ============================================================
 
 
-@app.get("/api/memories")
-async def api_get_memories(layer: int = None, active_only: bool = None):
-    """获取所有记忆（管理页面用）
-
-    Query params:
-        layer: 筛选层级（1=碎片, 2=事件, 3=核心）
-        active_only: 是否只返回活跃记忆
-    """
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-    memories = await get_all_memories_detail(layer=layer, active_only=active_only)
-    tz_offset = timezone(timedelta(hours=TIMEZONE_HOURS))
-    for m in memories:
-        if m.get("created_at"):
-            dt = m["created_at"]
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            m["created_at"] = dt.astimezone(tz_offset).strftime("%Y-%m-%d %H:%M:%S")
-    # 获取层级统计
-    try:
-        layer_stats = await get_layer_statistics()
-    except Exception:
-        layer_stats = None
-
-    result = {"memories": memories}
-    if layer_stats:
-        result["layer_stats"] = layer_stats
-    return result
-
-
-@app.get("/api/memories/search")
-async def api_search_memories(q: str = "", limit: int = 20):
-    """语义搜索记忆（Dashboard用，走后端 search_memories）"""
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-    if not q.strip():
-        return {"error": "搜索关键词不能为空", "results": []}
-    try:
-        results = await search_memories(q.strip(), limit)
-        tz_offset = timezone(timedelta(hours=TIMEZONE_HOURS))
-        out = []
-        for r in results:
-            item = dict(r)
-            if item.get("created_at"):
-                dt = item["created_at"]
-                if hasattr(dt, "tzinfo"):
-                    if dt.tzinfo is None:
-                        dt = dt.replace(tzinfo=timezone.utc)
-                    item["created_at"] = dt.astimezone(tz_offset).strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    )
-            out.append(item)
-        return {"results": out, "total": len(out)}
-    except Exception as e:
-        return {"error": str(e), "results": []}
-
-
-@app.put("/api/memories/{memory_id}")
-async def api_update_memory(memory_id: int, request: Request):
-    """更新单条记忆（支持 content / importance / title / layer）"""
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-    data = await request.json()
-    await update_memory_with_layer(
-        memory_id,
-        content=data.get("content"),
-        importance=data.get("importance"),
-        title=data.get("title"),
-        layer=data.get("layer"),
-    )
-    return {"status": "ok", "id": memory_id}
-
-
-@app.delete("/api/memories/{memory_id}")
-async def api_delete_memory(memory_id: int, soft: bool = False):
-    """删除单条记忆
-
-    Query params:
-        soft: true=归档（is_active=false），false=永久删除
-    """
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-    if soft:
-        await update_memory_with_layer(memory_id, is_active=False)
-    else:
-        await delete_memory(memory_id)
-    return {"status": "ok", "id": memory_id}
-
-
-@app.post("/api/memories/batch-update")
-async def api_batch_update(request: Request):
-    """批量更新记忆"""
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-    data = await request.json()
-    updates = data.get("updates", [])
-    if not updates:
-        return {"error": "没有要更新的记忆"}
-    for item in updates:
-        await update_memory_with_layer(
-            item["id"],
-            content=item.get("content"),
-            importance=item.get("importance"),
-            title=item.get("title"),
-            layer=item.get("layer"),
-        )
-    return {"status": "ok", "updated": len(updates)}
-
-
-@app.post("/api/memories/batch-delete")
-async def api_batch_delete(request: Request):
-    """批量删除记忆"""
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-    data = await request.json()
-    ids = data.get("ids", [])
-    if not ids:
-        return {"error": "未选择记忆"}
-    await delete_memories_batch(ids)
-    return {"status": "ok", "deleted": len(ids)}
+# /api/memories/* 路由已迁移到 routes/memories.py
 
 
 # ============================================================
@@ -1961,186 +1872,7 @@ async def consolidate_memories_for_date_range(start_date, end_date):
         return {"status": "error", "error": str(e)}
 
 
-@app.post("/api/memories/consolidate")
-async def api_manual_consolidate(request: Request):
-    """手动触发整理（异步，立即返回）
-
-    Body:
-        start_date: 开始日期（YYYY-MM-DD 格式）
-        end_date: 结束日期（YYYY-MM-DD 格式）
-        或
-        date: 单个日期（兼容旧版）
-    """
-    from datetime import date as date_type
-
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-
-    if _consolidate_status.get("running"):
-        return {
-            "status": "already_running",
-            "started_at": _consolidate_status.get("started_at"),
-        }
-
-    data = await request.json()
-
-    # 解析日期参数
-    if "date" in data and "start_date" not in data:
-        start_date = datetime.strptime(data["date"], "%Y-%m-%d").date()
-        end_date = start_date
-    else:
-        start_date_str = data.get("start_date")
-        end_date_str = data.get("end_date")
-
-        if not start_date_str or not end_date_str:
-            return {"error": "请提供开始和结束日期"}
-
-        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-        end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
-
-        if start_date > end_date:
-            return {"error": "开始日期不能晚于结束日期"}
-
-    async def _run():
-        _consolidate_status.update(
-            {
-                "running": True,
-                "started_at": f"{start_date}~{end_date}",
-                "result": None,
-                "error": None,
-            }
-        )
-        try:
-            result = await consolidate_memories_for_date_range(start_date, end_date)
-            _consolidate_status["result"] = result
-            print(f"[manual/consolidate] 整理 {start_date}~{end_date}: {result}")
-        except Exception as e:
-            _consolidate_status["error"] = str(e)
-            print(f"[manual/consolidate] 整理 {start_date}~{end_date} 失败: {e}")
-        finally:
-            _consolidate_status["running"] = False
-
-    asyncio.create_task(_run())
-    return {
-        "status": "started",
-        "start_date": str(start_date),
-        "end_date": str(end_date),
-    }
-
-
-@app.get("/api/memories/consolidate/status")
-async def api_consolidate_status():
-    """查询整理任务状态"""
-    return _consolidate_status
-
-
-@app.post("/api/memories/{memory_id}/promote")
-async def api_promote_to_core(memory_id: int, request: Request):
-    """将记忆升级为核心记忆"""
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-
-    data = await request.json()
-    title = data.get("title")
-
-    await promote_to_core(memory_id, title=title)
-    return {"status": "ok", "memory_id": memory_id, "layer": 3}
-
-
-@app.post("/api/memories/merge")
-async def api_merge_memories(request: Request):
-    """手动合并多条记忆"""
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-
-    data = await request.json()
-    memory_ids = data.get("ids", [])
-    new_title = data.get("title", "")
-    new_content = data.get("content", "")
-    importance = data.get("importance", 5)
-    layer = data.get("layer", 2)
-
-    if not memory_ids or not new_content:
-        return {"error": "请提供记忆ID列表和合并后内容"}
-
-    new_id = await merge_memories(memory_ids, new_title, new_content, importance, layer)
-    return {"status": "ok", "new_id": new_id, "merged": len(memory_ids)}
-
-
-@app.post("/api/memories/check-duplicate")
-async def api_check_duplicate(request: Request):
-    """检查记忆是否重复"""
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-
-    data = await request.json()
-    content = data.get("content", "")
-    threshold = data.get("threshold", 0.7)
-
-    if not content:
-        return {"error": "请提供记忆内容"}
-
-    result = await check_duplicate_memory(content, threshold)
-    return result
-
-
-@app.post("/api/memories/cleanup-fragments")
-async def api_cleanup_fragments(request: Request):
-    """清理指定天数前的归档碎片
-
-    Body:
-        days: 清理多少天前的归档碎片（默认30天）
-    """
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-
-    data = await request.json()
-    days = data.get("days", 30)
-
-    try:
-        deleted = await cleanup_old_fragments(days)
-        return {"status": "ok", "deleted": deleted, "days": days}
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@app.post("/api/memories/{memory_id}/revert-merge")
-async def api_revert_merge(memory_id: int):
-    """撤回合并操作：恢复原始碎片，删除合并后的事件记忆"""
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-
-    try:
-        result = await revert_merge(memory_id)
-        return result
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@app.post("/api/memories/{memory_id}/restore")
-async def api_restore_memory(memory_id: int):
-    """恢复已归档的记忆（将 is_active 设为 TRUE）"""
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-
-    try:
-        await update_memory_with_layer(memory_id, is_active=True)
-        return {"status": "ok", "id": memory_id}
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@app.get("/api/memories/layer-stats")
-async def api_layer_statistics():
-    """获取各层记忆统计数据"""
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-
-    try:
-        stats = await get_layer_statistics()
-        return stats
-    except Exception as e:
-        return {"error": str(e)}
+# /api/memories/* 路由已迁移到 routes/memories.py
 
 
 @app.post("/import/text")
@@ -2248,539 +1980,37 @@ async def import_memories(request: Request):
 
 
 # ============================================================
-# 对话记录管理 API
+# 对话记录管理 API - 已迁移到 routes/conversations.py
 # ============================================================
 
 
-@app.get("/api/conversations")
-async def api_conversations(page: int = 1, per_page: int = 20):
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-    try:
-        results, total = await get_conversations_paginated(page, per_page)
-        total_pages = max(1, -(-total // per_page))  # 向上取整
-        return {
-            "conversations": results,
-            "total": total,
-            "page": page,
-            "per_page": per_page,
-            "total_pages": total_pages,
-        }
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@app.get("/api/conversations/{session_id}/messages")
-async def api_conversation_messages(session_id: str, limit: int = 50, offset: int = 0):
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-    try:
-        pool = await get_pool()
-        async with pool.acquire() as conn:
-            total = await conn.fetchval(
-                "SELECT COUNT(*) FROM conversations WHERE session_id = $1", session_id
-            )
-            rows = await conn.fetch(
-                """
-                SELECT id, role, content, created_at
-                FROM conversations WHERE session_id = $1
-                ORDER BY created_at DESC
-                LIMIT $2 OFFSET $3
-            """,
-                session_id,
-                limit,
-                offset,
-            )
-        msgs = [
-            {
-                "id": r["id"],
-                "role": r["role"],
-                "content": r["content"],
-                "created_at": r["created_at"].isoformat()
-                if r.get("created_at")
-                else None,
-            }
-            for r in rows
-        ]
-        return {"messages": msgs, "total": total}
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@app.delete("/api/conversations/{session_id}")
-async def api_delete_conversation(session_id: str):
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-    try:
-        await delete_conversation(session_id)
-        return {"status": "ok"}
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@app.post("/api/conversations/batch-delete")
-async def api_batch_delete(request: Request):
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-    try:
-        body = await request.json()
-        ids = body.get("session_ids", [])
-        if ids:
-            await batch_delete_conversations(ids)
-        return {"status": "ok", "deleted": len(ids)}
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@app.post("/api/admin/merge-sessions")
-async def api_merge_sessions(request: Request):
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-    try:
-        body = await request.json()
-        source_ids = [
-            s for s in body.get("source_ids", []) if s != body.get("target_id", "")
-        ]
-        target_id = body.get("target_id", "")
-        if not source_ids or not target_id:
-            return {"error": "source_ids 和 target_id 不能为空"}
-        result = await merge_sessions_to_target(source_ids, target_id)
-        return {"status": "ok", **result}
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@app.get("/api/chat/search")
-async def api_search_conversations(q: str = "", limit: int = 20, offset: int = 0):
-    """搜索对话内容"""
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-    if not q.strip():
-        return {"error": "搜索关键词不能为空", "results": [], "total": 0}
-    try:
-        results, total = await search_conversations(q.strip(), limit, offset)
-        return {"results": results, "total": total}
-    except Exception as e:
-        return {"error": str(e), "results": [], "total": 0}
-
-
-@app.patch("/api/chat/messages/{message_id}")
-async def api_update_message(message_id: int, request: Request):
-    """编辑单条消息内容"""
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-    try:
-        body = await request.json()
-        content = body.get("content", "").strip()
-        if not content:
-            return {"error": "内容不能为空"}
-        updated = await update_message_content(message_id, content)
-        if updated == 0:
-            return {"error": "消息不存在"}
-        return {"status": "ok"}
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@app.get("/api/conversations/export")
-async def api_export_conversations():
-    """导出所有对话记录"""
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-    try:
-        data = await export_all_conversations()
-        return JSONResponse(content=data)
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@app.post("/api/conversations/import")
-async def api_import_conversations(request: Request):
-    """导入对话记录（JSON格式，自动去重）"""
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-    try:
-        records = await request.json()
-        if not isinstance(records, list):
-            return {"error": "格式错误：需要 JSON 数组"}
-        imported, skipped = await import_conversations(records)
-        return {
-            "status": "ok",
-            "imported": imported,
-            "skipped": skipped,
-            "total": imported + skipped,
-        }
-    except Exception as e:
-        return {"error": str(e)}
+# /api/conversations/* 路由已迁移到 routes/conversations.py
+# /api/chat/* 路由已迁移到 routes/conversations.py
+# /api/admin/merge-sessions 路由已迁移到 routes/admin.py
 
 
 # ============================================================
-# 对话线管理 API（分区缓存）
+# 对话线管理 API（分区缓存）- 已迁移到 routes/partition.py
 # ============================================================
 
 
-@app.get("/api/partition/status")
-async def api_partition_status():
-    active_sid = get_active_session_id()
-    state = await get_session_cache_state(active_sid) if active_sid else {}
-    return {
-        "enabled": CACHE_PARTITION_ENABLED,
-        "active_session_id": active_sid,
-        "partition_x": CACHE_PARTITION_X,
-        "summary_model": CACHE_SUMMARY_MODEL,
-        "summary": "\n\n".join(state.get("summary_parts", [])),
-        "summary_parts": state.get("summary_parts", []),
-        "summary_count": len(state.get("summary_parts", [])),
-        "summary_length": sum(len(p) for p in state.get("summary_parts", [])),
-        "a_start_round": state.get("a_start_round", 0),
-        "updated_at": state.get("updated_at").isoformat()
-        if state.get("updated_at")
-        else None,
-    }
-
-
-@app.get("/api/partition/threads")
-async def api_partition_threads():
-    threads = await list_all_session_cache_states()
-    active_sid = get_active_session_id()
-    for t in threads:
-        t["is_active"] = t["session_id"] == active_sid
-    if active_sid and not any(t["session_id"] == active_sid for t in threads):
-        threads.insert(
-            0,
-            {
-                "session_id": active_sid,
-                "summary": "",
-                "summary_length": 0,
-                "summary_count": 0,
-                "a_start_round": 0,
-                "updated_at": None,
-                "message_count": 0,
-                "chat_tokens": 0,
-                "is_active": True,
-            },
-        )
-    return {"threads": threads, "active_session_id": active_sid}
-
-
-@app.put("/api/partition/summary")
-async def api_update_summary(request: Request):
-    try:
-        body = await request.json()
-        sid = body.get("session_id", "")
-        summary = body.get("summary", "")
-        if not sid:
-            return {"error": "session_id 不能为空"}
-        state = await get_session_cache_state(sid)
-        summary_parts = (
-            [summary]
-            if isinstance(summary, str) and summary
-            else summary
-            if isinstance(summary, list)
-            else []
-        )
-        # 摘要清空时 a_start_round 也归零，否则历史会被跳过
-        a_start = state.get("a_start_round", 0) if summary_parts else 0
-        await save_session_cache_state(sid, summary_parts, a_start)
-        total_len = sum(len(p) for p in summary_parts)
-        return {
-            "status": "ok",
-            "summary_parts": len(summary_parts),
-            "summary_length": total_len,
-        }
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@app.delete("/api/partition/summary")
-async def api_clear_summary(request: Request):
-    try:
-        body = await request.json()
-        sid = body.get("session_id", "")
-        if not sid:
-            return {"error": "session_id 不能为空"}
-        # 摘要和 a_start_round 一起归零
-        await save_session_cache_state(sid, [], 0)
-        return {"status": "ok"}
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@app.post("/api/partition/thread")
-async def api_create_thread(request: Request):
-    try:
-        body = await request.json()
-        new_id = body.get("session_id", "").strip()
-        copy_from = body.get("copy_summary_from", "")
-        if not new_id:
-            return {"error": "session_id 不能为空"}
-        existing = await get_session_cache_state(new_id)
-        if existing.get("updated_at"):
-            return {"error": f"对话线 '{new_id}' 已存在"}
-        summary_parts = []
-        if copy_from:
-            source = await get_session_cache_state(copy_from)
-            summary_parts = source.get("summary_parts", [])
-        await save_session_cache_state(new_id, summary_parts, 0)
-        total_len = sum(len(p) for p in summary_parts)
-        return {"status": "ok", "session_id": new_id, "summary_length": total_len}
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@app.post("/api/partition/switch")
-async def api_switch_thread(request: Request):
-    global PARTITION_SESSION_ID
-    try:
-        body = await request.json()
-        new_id = body.get("session_id", "").strip()
-        if not new_id:
-            return {"error": "session_id 不能为空"}
-        old_id = PARTITION_SESSION_ID
-        PARTITION_SESSION_ID = new_id
-        await set_gateway_config("partition_session_id", new_id)
-        return {"status": "ok", "old_session_id": old_id, "new_session_id": new_id}
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@app.put("/api/partition/thread/rename")
-async def api_rename_thread(request: Request):
-    global PARTITION_SESSION_ID
-    try:
-        body = await request.json()
-        old_id = body.get("old_id", "").strip()
-        new_id = body.get("new_id", "").strip()
-        if not old_id or not new_id:
-            return {"error": "old_id 和 new_id 不能为空"}
-        if old_id == new_id:
-            return {"error": "新旧ID相同"}
-        success = await rename_session_id(old_id, new_id)
-        if not success:
-            return {"error": f"对话线 '{new_id}' 已存在"}
-        # 如果重命名的是活跃线，同步更新
-        if PARTITION_SESSION_ID == old_id:
-            PARTITION_SESSION_ID = new_id
-            await set_gateway_config("partition_session_id", new_id)
-        return {"status": "ok", "old_id": old_id, "new_id": new_id}
-    except Exception as e:
-        return {"error": str(e)}
+# /api/partition/* 路由已迁移到 routes/partition.py
 
 
 # ============================================================
-# 记忆向量补算（带进度追踪）
-# ============================================================
-
-_backfill_mem_status = {
-    "running": False,
-    "total": 0,
-    "done": 0,
-    "error": None,
-    "finished_at": None,
-}
-
-
-@app.post("/api/admin/backfill-memory-embeddings")
-async def api_backfill_memory_embeddings():
-    """给已有记忆补算embedding（后台异步执行，前端轮询进度）"""
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用"}
-
-    if _backfill_mem_status["running"]:
-        return {"error": "补算任务正在运行中，请等待完成"}
-
-    try:
-        total = await get_pending_memory_embedding_count()
-    except Exception as e:
-        return {"error": f"查询待处理数量失败: {e}"}
-
-    if total == 0:
-        return {
-            "status": "done",
-            "message": "所有记忆已有embedding，无需补算",
-            "total": 0,
-            "done": 0,
-        }
-
-    _backfill_mem_status["running"] = True
-    _backfill_mem_status["total"] = total
-    _backfill_mem_status["done"] = 0
-    _backfill_mem_status["error"] = None
-    _backfill_mem_status["finished_at"] = None
-
-    async def run_backfill():
-        try:
-            while _backfill_mem_status["running"]:
-                updated = await backfill_memory_embeddings(batch_size=20)
-                _backfill_mem_status["done"] += updated
-
-                if updated == 0:
-                    break
-
-                await asyncio.sleep(1)
-
-            _backfill_mem_status["finished_at"] = datetime.now(timezone.utc).isoformat()
-            print(
-                f"✅ 记忆embedding补算完成：{_backfill_mem_status['done']}/{_backfill_mem_status['total']}"
-            )
-        except Exception as e:
-            _backfill_mem_status["error"] = str(e)
-            print(f"❌ 记忆embedding补算异常: {e}")
-        finally:
-            _backfill_mem_status["running"] = False
-
-    asyncio.create_task(run_backfill())
-    return {"status": "started", "total": total}
-
-
-@app.get("/api/admin/backfill-memory-embeddings/status")
-async def api_backfill_memory_embeddings_status():
-    """查询记忆embedding补算进度"""
-    return {
-        "running": _backfill_mem_status["running"],
-        "total": _backfill_mem_status["total"],
-        "done": _backfill_mem_status["done"],
-        "error": _backfill_mem_status["error"],
-        "finished_at": _backfill_mem_status["finished_at"],
-    }
-
-
-# ============================================================
-# 模型列表 API（/api/models）
-# 设置面板的 combo-box 用，根据 API_BASE_URL 自动适配
+# 记忆向量补算（带进度追踪）- 已迁移到 routes/admin.py
 # ============================================================
 
 
-@app.get("/api/models")
-async def get_models():
-    """获取可用模型列表（根据 API_BASE_URL 自动适配）"""
-    is_openrouter = "openrouter.ai" in API_BASE_URL
-    is_google = "googleapis.com" in API_BASE_URL or "generativelanguage" in API_BASE_URL
-    is_openai = "api.openai.com" in API_BASE_URL
+# /api/admin/backfill-memory-embeddings/* 路由已迁移到 routes/admin.py
 
-    try:
-        if is_openrouter:
-            async with httpx.AsyncClient(timeout=30) as client:
-                response = await client.get(
-                    "https://openrouter.ai/api/v1/models",
-                    headers={"Authorization": f"Bearer {API_KEY}"},
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    models = data.get("data", [])
-                    simplified = [
-                        {
-                            "id": m.get("id"),
-                            "name": m.get("name"),
-                            "context_length": m.get("context_length"),
-                        }
-                        for m in models
-                    ]
-                    simplified.sort(key=lambda x: x.get("name", ""))
-                    return {
-                        "models": simplified,
-                        "total": len(simplified),
-                        "provider": "openrouter",
-                    }
 
-        elif is_google:
-            async with httpx.AsyncClient(timeout=30) as client:
-                response = await client.get(
-                    f"https://generativelanguage.googleapis.com/v1beta/models?key={API_KEY}"
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    models = data.get("models", [])
-                    simplified = []
-                    for m in models:
-                        full_name = m.get("name", "")
-                        model_id = (
-                            full_name.replace("models/", "")
-                            if full_name.startswith("models/")
-                            else full_name
-                        )
-                        display_name = m.get("displayName", model_id)
-                        supported_methods = m.get("supportedGenerationMethods", [])
-                        if "generateContent" in supported_methods:
-                            simplified.append(
-                                {
-                                    "id": model_id,
-                                    "name": display_name,
-                                    "context_length": m.get("inputTokenLimit"),
-                                    "output_limit": m.get("outputTokenLimit"),
-                                }
-                            )
+# ============================================================
+# 模型列表 API（/api/models）- 已迁移到 routes/admin.py
+# ============================================================
 
-                    def sort_key(x):
-                        name = x.get("id", "")
-                        if "gemini-3" in name:
-                            return "0" + name
-                        elif "gemini-2.5" in name:
-                            return "1" + name
-                        elif "gemini-2.0" in name:
-                            return "2" + name
-                        else:
-                            return "9" + name
 
-                    simplified.sort(key=sort_key)
-                    return {
-                        "models": simplified,
-                        "total": len(simplified),
-                        "provider": "google",
-                    }
-                else:
-                    print(
-                        f"[get_models] Google API 返回 {response.status_code}: {response.text}"
-                    )
-                    return {
-                        "error": f"Google API 返回 {response.status_code}",
-                        "models": [],
-                        "provider": "google",
-                    }
-
-        elif is_openai:
-            async with httpx.AsyncClient(timeout=30) as client:
-                response = await client.get(
-                    "https://api.openai.com/v1/models",
-                    headers={"Authorization": f"Bearer {API_KEY}"},
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    models = data.get("data", [])
-                    simplified = [
-                        {"id": m.get("id", ""), "name": m.get("id", "")}
-                        for m in models
-                        if m.get("id", "").startswith(("gpt-", "o1", "o3", "o4"))
-                    ]
-                    simplified.sort(key=lambda x: x.get("id", ""))
-                    return {
-                        "models": simplified,
-                        "total": len(simplified),
-                        "provider": "openai",
-                    }
-            openai_models = [
-                {"id": "gpt-4.1", "name": "GPT-4.1"},
-                {"id": "gpt-4o", "name": "GPT-4o"},
-                {"id": "gpt-4o-mini", "name": "GPT-4o Mini"},
-                {"id": "o3-mini", "name": "o3-mini"},
-            ]
-            return {
-                "models": openai_models,
-                "total": len(openai_models),
-                "provider": "openai",
-            }
-
-        else:
-            return {
-                "models": [],
-                "total": 0,
-                "provider": "unknown",
-                "note": "未识别的 API，请手动输入模型名",
-            }
-
-    except Exception as e:
-        print(f"[get_models] 错误: {e}")
-        return {"error": str(e), "models": []}
+# /api/models 路由已迁移到 routes/admin.py
 
 
 # ============================================================
