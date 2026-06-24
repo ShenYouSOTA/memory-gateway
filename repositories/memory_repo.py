@@ -154,20 +154,29 @@ class PostgresMemoryRepository(MemoryRepository):
             )
             return [dict(r) for r in rows]
 
-    async def get_layer_statistics(self) -> Dict[str, int]:
+    async def get_layer_statistics(self) -> Dict[str, Any]:
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT layer, COUNT(*) as cnt FROM memories WHERE is_active = TRUE GROUP BY layer"
+                """
+                SELECT
+                    layer,
+                    COUNT(*) as count,
+                    COUNT(*) FILTER (WHERE is_active = TRUE) as active_count
+                FROM memories
+                GROUP BY layer
+                ORDER BY layer
+                """
             )
-            stats = {"layer1": 0, "layer2": 0, "layer3": 0}
+            stats = {
+                "layer_1": {"total": 0, "active": 0},
+                "layer_2": {"total": 0, "active": 0},
+                "layer_3": {"total": 0, "active": 0},
+            }
             for row in rows:
-                layer = row["layer"]
-                if layer == 1:
-                    stats["layer1"] = row["cnt"]
-                elif layer == 2:
-                    stats["layer2"] = row["cnt"]
-                elif layer == 3:
-                    stats["layer3"] = row["cnt"]
+                layer = row["layer"] or 1
+                key = f"layer_{layer}"
+                if key in stats:
+                    stats[key] = {"total": row["count"], "active": row["active_count"]}
             return stats
 
     async def promote_to_core(self, memory_id: int, title: str = None) -> bool:
@@ -226,3 +235,85 @@ class PostgresMemoryRepository(MemoryRepository):
                 "is_duplicate": len(rows) > 0,
                 "similar_memories": [dict(r) for r in rows],
             }
+
+    async def update_full(
+        self,
+        memory_id: int,
+        content: Optional[str] = None,
+        importance: Optional[int] = None,
+        title: Optional[str] = None,
+        layer: Optional[int] = None,
+        is_active: Optional[bool] = None,
+    ) -> None:
+        updates = []
+        params = []
+        idx = 2  # $1 给 memory_id
+
+        if content is not None:
+            updates.append(f"content = ${idx}")
+            params.append(content)
+            idx += 1
+        if importance is not None:
+            updates.append(f"importance = ${idx}")
+            params.append(importance)
+            idx += 1
+        if title is not None:
+            updates.append(f"title = ${idx}")
+            params.append(title)
+            idx += 1
+        if layer is not None:
+            updates.append(f"layer = ${idx}")
+            params.append(layer)
+            idx += 1
+        if is_active is not None:
+            updates.append(f"is_active = ${idx}")
+            params.append(is_active)
+            idx += 1
+
+        if not updates:
+            return
+
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                f"UPDATE memories SET {', '.join(updates)} WHERE id = $1",
+                memory_id,
+                *params,
+            )
+
+    async def cleanup_fragments(self, days: int = 30) -> int:
+        from datetime import timedelta
+
+        async with self.pool.acquire() as conn:
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+            result = await conn.execute(
+                """
+                DELETE FROM memories
+                WHERE layer = 1 AND is_active = FALSE AND created_at < $1
+                """,
+                cutoff,
+            )
+            return int(result.split()[-1]) if result else 0
+
+    async def revert_merge(self, memory_id: int) -> Dict[str, Any]:
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT id, layer, merged_from FROM memories WHERE id = $1",
+                memory_id,
+            )
+            if not row:
+                return {"error": "记忆不存在"}
+            if row["layer"] != 2:
+                return {"error": "只能撤回事件记忆的合并"}
+
+            merged_from = row["merged_from"] or []
+            if not merged_from:
+                return {"error": "无原始碎片信息"}
+
+            await conn.execute(
+                "UPDATE memories SET is_active = TRUE WHERE id = ANY($1)",
+                merged_from,
+            )
+            await conn.execute(
+                "DELETE FROM memories WHERE id = $1", memory_id
+            )
+            return {"status": "ok", "restored": len(merged_from)}

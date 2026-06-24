@@ -131,13 +131,35 @@ class PostgresConversationRepository(ConversationRepository):
         self, source_ids: List[str], target_id: str
     ) -> Dict[str, Any]:
         async with self.pool.acquire() as conn:
-            # 将源会话的消息移动到目标会话
+            if not source_ids:
+                return {"merged_sessions": 0, "merged_messages": 0, "merged_token_records": 0}
+            msg_count = await conn.fetchval(
+                "SELECT COUNT(*) FROM conversations WHERE session_id = ANY($1)", source_ids
+            )
             await conn.execute(
                 "UPDATE conversations SET session_id = $1 WHERE session_id = ANY($2)",
                 target_id,
                 source_ids,
             )
-            return {"merged": len(source_ids), "target": target_id}
+            token_count = await conn.fetchval(
+                "SELECT COUNT(*) FROM token_usage WHERE session_id = ANY($1)", source_ids
+            )
+            await conn.execute(
+                "UPDATE token_usage SET session_id = $1 WHERE session_id = ANY($2)",
+                target_id,
+                source_ids,
+            )
+            await conn.execute(
+                "DELETE FROM conversation_titles WHERE session_id = ANY($1)", source_ids
+            )
+            await conn.execute(
+                "DELETE FROM session_cache_state WHERE session_id = ANY($1)", source_ids
+            )
+            return {
+                "merged_sessions": len(source_ids),
+                "merged_messages": msg_count or 0,
+                "merged_token_records": token_count or 0,
+            }
 
     async def search(
         self, query: str, limit: int = 20, offset: int = 0
@@ -191,3 +213,12 @@ class PostgresConversationRepository(ConversationRepository):
                 except Exception:
                     continue
             return count
+
+    async def update_message_content(self, message_id: int, new_content: str) -> int:
+        async with self.pool.acquire() as conn:
+            result = await conn.execute(
+                "UPDATE conversations SET content = $1 WHERE id = $2",
+                new_content,
+                message_id,
+            )
+            return int(result.split()[-1]) if result else 0

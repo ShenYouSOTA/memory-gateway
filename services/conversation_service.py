@@ -58,3 +58,33 @@ class ConversationService:
     async def rename_session(self, old_id: str, new_id: str) -> bool:
         """重命名会话"""
         return await self.repo.rename_session(old_id, new_id)
+
+    async def update_message_content(self, message_id: int, new_content: str) -> int:
+        """更新单条消息内容"""
+        return await self.repo.update_message_content(message_id, new_content)
+
+    @staticmethod
+    def db_row_to_message(row: dict) -> dict:
+        """把DB记录还原成API消息格式"""
+        import json as _json
+
+        msg = {"role": row["role"], "content": row.get("content") or ""}
+
+        meta_str = row.get("metadata")
+        if meta_str:
+            try:
+                meta = _json.loads(meta_str)
+                if "tool_calls" in meta:
+                    msg["tool_calls"] = meta["tool_calls"]
+                    if not row.get("content"):
+                        msg["content"] = None
+                if "reasoning_content" in meta:
+                    msg["reasoning_content"] = meta["reasoning_content"]
+                if "tool_call_id" in meta:
+                    msg["tool_call_id"] = meta["tool_call_id"]
+                if "name" in meta:
+                    msg["name"] = meta["name"]
+            except Exception:
+                pass
+
+        return msg

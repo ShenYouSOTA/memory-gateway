@@ -22,7 +22,17 @@ tags: ["ospec", "project", "full"]
 
 ## 项目架构
 
-OSpec 已初始化协议壳和基础项目知识文档，后续可结合仓库实际方向继续细化架构。
+分层架构：Routes → Services → Repositories → PostgreSQL/zvec。
+
+- `routes/` — HTTP 路由（memories/conversations/partition/admin/chat/settings）
+- `services/` — 业务逻辑（MemoryService/ChatService/ExtractionService/CacheService/ConfigService/ConversationService）
+- `repositories/` — 数据访问（MemoryRepo/ConversationRepo/ConfigRepo/VectorRepo）
+- `utils/` — 工具函数（stream_helpers/partition_cache/memory_helpers/consolidation_helpers）
+- `middleware/` — 鉴权（auth.py）
+- `main.py` — app 初始化、lifespan、核心转发路由（/v1/chat/completions）
+- `database.py` — 连接池、DDL、legacy 直查函数
+
+**当前状态**：routes 层仍直调 database.py，service/repo 层未被充分利用。待修复依赖关系。
 
 ## 目录导航
 

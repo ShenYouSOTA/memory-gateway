@@ -11,6 +11,10 @@ from fastapi.responses import JSONResponse
 router = APIRouter()
 
 
+def _get_conversation_service(request: Request):
+    return request.app.state.conversation_service
+
+
 @router.get("/api/conversations")
 async def get_conversations(
     request: Request,
@@ -18,10 +22,8 @@ async def get_conversations(
     per_page: int = Query(20, ge=1, le=100),
 ):
     """获取对话列表"""
-    from database import get_conversations_paginated
-    
-    result = await get_conversations_paginated(page, per_page)
-    return result
+    conversation_service = _get_conversation_service(request)
+    return await conversation_service.list_sessions(page, per_page)
 
 
 @router.get("/api/conversations/{session_id}/messages")
@@ -31,10 +33,9 @@ async def get_conversation_messages(
     limit: int = Query(100, ge=1, le=1000),
 ):
     """获取对话消息"""
-    from database import get_conversation_messages, db_row_to_message
-    
-    rows = await get_conversation_messages(session_id, limit)
-    messages = [db_row_to_message(r) for r in rows] if rows else []
+    conversation_service = _get_conversation_service(request)
+    rows = await conversation_service.get_messages(session_id, limit)
+    messages = [conversation_service.db_row_to_message(r) for r in rows] if rows else []
     return {"messages": messages}
 
 
@@ -44,9 +45,8 @@ async def delete_conversation(
     session_id: str,
 ):
     """删除对话"""
-    from database import delete_conversation
-    
-    await delete_conversation(session_id)
+    conversation_service = _get_conversation_service(request)
+    await conversation_service.delete_session(session_id)
     return {"success": True}
 
 
@@ -55,11 +55,10 @@ async def batch_delete_conversations(
     request: Request,
 ):
     """批量删除对话"""
-    from database import batch_delete_conversations
-    
+    conversation_service = _get_conversation_service(request)
     body = await request.json()
     session_ids = body.get("session_ids", [])
-    deleted = await batch_delete_conversations(session_ids)
+    deleted = await conversation_service.batch_delete_sessions(session_ids)
     return {"success": True, "deleted": deleted}
 
 
@@ -71,13 +70,13 @@ async def search_conversations(
     offset: int = Query(0, ge=0),
 ):
     """搜索对话"""
-    from database import search_conversations
-    
+    conversation_service = _get_conversation_service(request)
+
     if not q.strip():
         return {"error": "搜索关键词不能为空", "results": [], "total": 0}
     try:
-        results, total = await search_conversations(q.strip(), limit, offset)
-        return {"results": results, "total": total}
+        results = await conversation_service.search(q.strip(), limit, offset)
+        return {"results": results, "total": len(results)}
     except Exception as e:
         return {"error": str(e), "results": [], "total": 0}
 
@@ -85,9 +84,8 @@ async def search_conversations(
 @router.get("/api/conversations/export")
 async def export_conversations(request: Request):
     """导出对话"""
-    from database import export_all_conversations
-    
-    data = await export_all_conversations()
+    conversation_service = _get_conversation_service(request)
+    data = await conversation_service.export_all()
     return JSONResponse(content=data)
 
 
@@ -96,30 +94,30 @@ async def import_conversations(
     request: Request,
 ):
     """导入对话"""
-    from database import import_conversations
-    
+    conversation_service = _get_conversation_service(request)
+
     records = await request.json()
     if not isinstance(records, list):
         return {"error": "格式错误：需要 JSON 数组"}
-    imported, skipped = await import_conversations(records)
+    imported = await conversation_service.import_records(records)
     return {
         "status": "ok",
         "imported": imported,
-        "skipped": skipped,
-        "total": imported + skipped,
+        "skipped": 0,
+        "total": imported,
     }
 
 
 @router.patch("/api/chat/messages/{message_id}")
 async def update_message(message_id: int, request: Request):
     """编辑单条消息内容"""
-    from database import update_message_content
-    
+    conversation_service = _get_conversation_service(request)
+
     body = await request.json()
     content = body.get("content", "").strip()
     if not content:
         return {"error": "内容不能为空"}
-    updated = await update_message_content(message_id, content)
+    updated = await conversation_service.update_message_content(message_id, content)
     if updated == 0:
         return {"error": "消息不存在"}
     return {"status": "ok"}

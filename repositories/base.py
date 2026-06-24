@@ -102,6 +102,29 @@ class MemoryRepository(ABC):
         """检查重复记忆"""
         ...
 
+    @abstractmethod
+    async def update_full(
+        self,
+        memory_id: int,
+        content: Optional[str] = None,
+        importance: Optional[int] = None,
+        title: Optional[str] = None,
+        layer: Optional[int] = None,
+        is_active: Optional[bool] = None,
+    ) -> None:
+        """更新记忆（支持三层架构全部字段）"""
+        ...
+
+    @abstractmethod
+    async def cleanup_fragments(self, days: int = 30) -> int:
+        """清理指定天数前的归档碎片，返回删除数量"""
+        ...
+
+    @abstractmethod
+    async def revert_merge(self, memory_id: int) -> Dict[str, Any]:
+        """撤回合并操作，恢复原始碎片"""
+        ...
+
 
 class ConversationRepository(ABC):
     """对话存储接口"""
@@ -181,6 +204,11 @@ class ConversationRepository(ABC):
         """导入对话记录，返回导入数量"""
         ...
 
+    @abstractmethod
+    async def update_message_content(self, message_id: int, new_content: str) -> int:
+        """更新单条消息内容，返回影响行数"""
+        ...
+
 
 class ConfigRepository(ABC):
     """配置存储接口"""
@@ -198,6 +226,35 @@ class ConfigRepository(ABC):
     @abstractmethod
     async def get_all(self) -> Dict[str, str]:
         """获取所有配置"""
+        ...
+
+
+class VectorRepository(ABC):
+    """向量存储接口"""
+
+    @abstractmethod
+    async def init(self) -> None:
+        """初始化向量存储"""
+        ...
+
+    @abstractmethod
+    async def insert(self, id: str, vector: List[float], metadata: Dict[str, Any]) -> bool:
+        """插入向量"""
+        ...
+
+    @abstractmethod
+    async def search(self, vector: List[float], topk: int = 10) -> List[Dict[str, Any]]:
+        """向量相似度搜索"""
+        ...
+
+    @abstractmethod
+    async def delete(self, id: str) -> bool:
+        """删除向量"""
+        ...
+
+    @abstractmethod
+    async def batch_insert(self, items: List[Dict[str, Any]]) -> int:
+        """批量插入，返回成功数量"""
         ...
 
 

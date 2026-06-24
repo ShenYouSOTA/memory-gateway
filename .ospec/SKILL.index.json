@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated": "2026-06-23T08:13:58.710Z",
+  "generated": "2026-06-24T08:50:15.841Z",
   "git_commit": null,
   "active_changes": [],
   "stats": {
@@ -64,19 +64,19 @@
           "level": 2,
           "title": "项目架构",
           "start": 244,
-          "end": 296
+          "end": 856
         },
         "目录导航": {
           "level": 2,
           "title": "目录导航",
-          "start": 296,
-          "end": 454
+          "start": 856,
+          "end": 1014
         },
         "插件阻断": {
           "level": 2,
           "title": "插件阻断",
-          "start": 454,
-          "end": 679
+          "start": 1014,
+          "end": 1239
         }
       }
     }

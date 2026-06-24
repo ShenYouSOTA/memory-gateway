@@ -227,16 +227,18 @@ class TestPostgresMemoryRepositoryLayerStats:
     async def test_returns_stats(self):
         mock_conn = AsyncMock()
 
-        def make_row(layer, cnt):
+        def make_row(layer, count, active_count):
             row = MagicMock()
-            row.__getitem__ = MagicMock(side_effect=lambda k: layer if k == "layer" else cnt)
+            row.__getitem__ = MagicMock(
+                side_effect=lambda k: layer if k == "layer" else (count if k == "count" else active_count)
+            )
             return row
 
         mock_conn.fetch = AsyncMock(
             return_value=[
-                make_row(1, 5),
-                make_row(2, 3),
-                make_row(3, 2),
+                make_row(1, 5, 5),
+                make_row(2, 3, 3),
+                make_row(3, 2, 2),
             ]
         )
         pool = create_mock_pool(mock_conn)
@@ -245,7 +247,11 @@ class TestPostgresMemoryRepositoryLayerStats:
         repo = PostgresMemoryRepository(pool)
         result = await repo.get_layer_statistics()
 
-        assert result == {"layer1": 5, "layer2": 3, "layer3": 2}
+        assert result == {
+            "layer_1": {"total": 5, "active": 5},
+            "layer_2": {"total": 3, "active": 3},
+            "layer_3": {"total": 2, "active": 2},
+        }
 
 
 class TestPostgresMemoryRepositoryPromoteToCore:
