@@ -613,7 +613,15 @@ async def chat_completions(request: Request):
             MEMORY_ENABLED and MEMORY_EXTRACT_ENABLED and user_message
         ):
             if MEMORY_ENABLED and MEMORY_EXTRACT_ENABLED and user_message:
-                enhanced_prompt = await build_system_prompt_with_memories(user_message)
+                memory_service = request.app.state.memory_service
+                enhanced_prompt = await _build_system_prompt_with_memories(
+                    user_message, SYSTEM_PROMPT,
+                    memory_service=memory_service,
+                    memory_enabled=MEMORY_ENABLED,
+                    memory_extract_enabled=MEMORY_EXTRACT_ENABLED,
+                    max_memories_inject=MAX_MEMORIES_INJECT,
+                    timezone_hours=TIMEZONE_HOURS,
+                )
             else:
                 enhanced_prompt = SYSTEM_PROMPT
 
@@ -683,16 +691,29 @@ async def chat_completions(request: Request):
         print(f"📡 推理字段: {debug_keys}", flush=True)
 
     if is_stream:
+        memory_service = request.app.state.memory_service if MEMORY_ENABLED else None
+        conversation_service = request.app.state.conversation_service if MEMORY_ENABLED else None
+
+        async def _process_memories_wrapper(*args, **kwargs):
+            return await _process_memories_background(
+                *args, **kwargs,
+                memory_service=memory_service,
+                conversation_service=conversation_service,
+            )
+
         return StreamingResponse(
-            stream_and_capture(
+            _stream_and_capture(
                 headers,
                 body,
                 session_id,
                 user_message,
                 model,
-                original_messages,
-                skip_conversation_log,
-                tool_messages,
+                API_BASE_URL,
+                process_memories_func=_process_memories_wrapper if MEMORY_ENABLED else None,
+                memory_enabled=MEMORY_ENABLED,
+                original_messages=original_messages,
+                skip_conversation_log=skip_conversation_log,
+                tool_messages=tool_messages,
             ),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
@@ -724,7 +745,7 @@ async def chat_completions(request: Request):
 
                 if MEMORY_ENABLED and (user_message or tool_messages):
                     asyncio.create_task(
-                        process_memories_background(
+                        _process_memories_background(
                             session_id,
                             user_message,
                             assistant_msg,
@@ -734,6 +755,8 @@ async def chat_completions(request: Request):
                             tool_messages=tool_messages,
                             assistant_tool_calls=assistant_tool_calls,
                             assistant_reasoning=assistant_reasoning,
+                            memory_service=request.app.state.memory_service,
+                            conversation_service=request.app.state.conversation_service,
                         )
                     )
 

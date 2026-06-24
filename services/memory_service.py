@@ -33,8 +33,26 @@ class MemoryService:
         importance: int = 5,
         source_session: str = "",
     ) -> int:
-        """保存记忆"""
-        return await self.repo.save(content, importance, source_session)
+        """保存记忆（双写 PG + zvec）"""
+        memory_id = await self.repo.save(content, importance, source_session)
+
+        # zvec 双写
+        if self.vector_repo and memory_id:
+            try:
+                embedding = await compute_embedding(content)
+                if embedding:
+                    await self.vector_repo.insert(
+                        id=str(memory_id),
+                        vector=embedding,
+                        metadata={
+                            "content": content,
+                            "importance": importance,
+                        },
+                    )
+            except Exception as e:
+                print(f"⚠️ zvec 双写失败（PG 已保存）: {e}")
+
+        return memory_id
 
     async def get_memory(self, memory_id: int) -> Optional[Dict[str, Any]]:
         """获取单条记忆"""

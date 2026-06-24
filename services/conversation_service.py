@@ -63,6 +63,20 @@ class ConversationService:
         """更新单条消息内容"""
         return await self.repo.update_message_content(message_id, new_content)
 
+    async def save_message(
+        self, session_id: str, role: str, content: str, model: str = "", metadata: str = None
+    ) -> int:
+        """保存消息"""
+        return await self.repo.save_message(session_id, role, content, model, metadata)
+
+    async def get_last_user_content(self, session_id: str) -> str:
+        """获取最后一条用户消息"""
+        return await self.repo.get_last_user_content(session_id)
+
+    async def update_last_assistant_message(self, session_id: str, content: str) -> bool:
+        """更新最后一条助手消息"""
+        return await self.repo.update_last_assistant_message(session_id, content)
+
     @staticmethod
     def db_row_to_message(row: dict) -> dict:
         """把DB记录还原成API消息格式"""
